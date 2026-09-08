@@ -1,0 +1,347 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card p-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-3">
+    <div>
+      <h4 class="mb-1">Entries</h4>
+      <div class="text-secondary">Review, edit, and export monthly encoded data.</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <form method="get" class="d-flex gap-2">
+        <select name="period_id" class="form-select">
+          {% for period in periods %}
+            <option value="{{ period.id }}" {% if selected_period and period.id == selected_period.id %}selected{% endif %}>{{ period.name }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-outline-secondary">View</button>
+      </form>
+      <a class="btn btn-primary" href="{{ url_for('new_entry') }}">New Entry</a>
+      {% if selected_period %}
+      <a class="btn btn-success" href="{{ url_for('export_period', period_id=selected_period.id) }}">Export Excel</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if selected_period and entries %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 data-table entries-table">
+      <thead class="table-light">
+        <tr>
+          <th class="cat-cell">CAT</th>
+          <th class="store-cell">Store</th>
+          <th class="address-cell">Address</th>
+          <th class="tin-cell">Actual TIN</th>
+          <th class="tin-cell">TIN Input Tax</th>
+          <th class="text-end amount-cell">Invoice</th>
+          <th class="text-end amount-cell">VAT</th>
+          <th class="text-end amount-cell">Cost W/O VAT</th>
+          <th class="text-end action-header">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+        <tr>
+          <td class="cat-cell">{{ entry.category or '-' }}</td>
+          <td class="store-cell"><span class="nowrap-scroll">{{ entry.store or '-' }}</span></td>
+          <td class="address-cell"><span class="nowrap-scroll">{{ entry.address or '-' }}</span></td>
+          <td class="tin-cell">{{ entry.actual_tin_number }}</td>
+          <td class="tin-cell">{{ entry.tin_number_on_input_tax or '-' }}</td>
+          <td class="text-end amount-cell">{{ '%.2f'|format(entry.invoice_value) }}</td>
+          <td class="text-end amount-cell">{{ '%.2f'|format(entry.vat_12) }}</td>
+          <td class="text-end amount-cell">{{ '%.2f'|format(entry.cost_wo_vat) }}</td>
+          <td class="text-end action-cell">
+            <div class="action-buttons">
+              <a class="btn btn-outline-primary btn-sm" href="{{ url_for('edit_entry', entry_id=entry.id) }}">Edit</a>
+              <form method="post" action="{{ url_for('delete_entry', entry_id=entry.id) }}" onsubmit="return confirm('Delete this entry?');">
+                <button class="btn btn-outline-danger btn-sm">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if entries_pagination and entries_pagination.pages > 1 %}
+  <div class="pagination-wrap mt-3">
+    <nav aria-label="Entries pages">
+      <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {% if not entries_pagination.has_prev %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('list_entries', period_id=selected_period.id, page=entries_pagination.prev_num) if entries_pagination.has_prev else '#' }}">Previous</a>
+        </li>
+        {% for p in entries_pagination.iter_pages(left_edge=1, left_current=1, right_current=2, right_edge=1) %}
+          {% if p %}
+          <li class="page-item {% if p == entries_pagination.page %}active{% endif %}">
+            <a class="page-link" href="{{ url_for('list_entries', period_id=selected_period.id, page=p) }}">{{ p }}</a>
+          </li>
+          {% else %}
+          <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not entries_pagination.has_next %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('list_entries', period_id=selected_period.id, page=entries_pagination.next_num) if entries_pagination.has_next else '#' }}">Next</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+  {% elif selected_period %}
+    <p class="text-secondary mb-0">No entries yet for {{ selected_period.name }}.</p>
+  {% else %}
+    <p class="text-secondary mb-0">Create a month first.</p>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- entries-full-search-fix -->
+<script>
+(function () {
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function findEntriesTable() {
+    const tables = Array.from(document.querySelectorAll('table'));
+    return tables.find(function (table) {
+      const text = (table.innerText || '').toLowerCase();
+      return text.includes('invoice') && text.includes('vat') && text.includes('actual tin') && text.includes('actions');
+    }) || null;
+  }
+
+  const table = findEntriesTable();
+  if (!table || table.dataset.fullEntriesSearchInstalled === '1') return;
+  table.dataset.fullEntriesSearchInstalled = '1';
+
+  const tbody = table.querySelector('tbody');
+  if (!tbody) return;
+
+  const originalBody = tbody.innerHTML;
+  const tableWrap = table.closest('.table-responsive') || table;
+  const card = table.closest('.card') || table.parentElement || document.body;
+
+  const serverPaginationNodes = Array.from(card.querySelectorAll('nav, .pagination'))
+    .map(function (node) { return node.closest('nav') || node; })
+    .filter(function (node, index, arr) { return node && arr.indexOf(node) === index; });
+  const serverPaginationDisplay = serverPaginationNodes.map(function (node) {
+    return [node, node.style.display || ''];
+  });
+
+  function setServerPaginationVisible(show) {
+    serverPaginationDisplay.forEach(function (pair) {
+      pair[0].style.display = show ? pair[1] : 'none';
+    });
+  }
+
+  function headers() {
+    return Array.from(table.querySelectorAll('thead th')).map(function (th) {
+      return (th.innerText || '').trim().toLowerCase();
+    });
+  }
+
+  const headerList = headers();
+  const actionIndex = headerList.findIndex(function (h) { return h.includes('action'); });
+  const firstRow = tbody.querySelector('tr');
+  const firstActionCell = firstRow && actionIndex >= 0 ? firstRow.children[actionIndex] : null;
+  const firstActionHtml = firstActionCell ? firstActionCell.innerHTML : '';
+
+  function actionHtml(item) {
+    if (actionIndex < 0) return '';
+    const id = String(item.id == null ? '' : item.id);
+    if (!id) return '';
+
+    if (firstActionHtml.trim()) {
+      // Reuse the real Edit/Delete buttons from your existing table and replace only the row id.
+      return firstActionHtml
+        .replace(/(\/entries?\/)(\d+)(\/(?:edit|delete))/g, '$1' + id + '$3')
+        .replace(/(\/entry\/)(\d+)(\/(?:edit|delete))/g, '$1' + id + '$3')
+        .replace(/(entry_id["']?\s*(?:value=|:)\s*["']?)(\d+)/gi, '$1' + id)
+        .replace(/(data-entry-id=["'])(\d+)(["'])/gi, '$1' + id + '$3');
+    }
+
+    return '<a href="/entries/' + encodeURIComponent(id) + '/edit" class="btn btn-sm btn-outline-primary me-1">Edit</a>' +
+      '<form method="post" action="/entries/' + encodeURIComponent(id) + '/delete" style="display:inline;" onsubmit="return confirm(\'Delete this entry?\');">' +
+      '<button type="submit" class="btn btn-sm btn-outline-danger">Delete</button></form>';
+  }
+
+  function cellValue(header, item) {
+    if (header.includes('action')) return null;
+    if (header === 'cat' || header.includes('category')) return item.category;
+    if (header.includes('store')) return item.store;
+    if (header.includes('address')) return item.address;
+    if (header.includes('actual')) return item.actual_tin_number;
+    if (header.includes('input') || header.includes('needed')) return item.tin_number_on_input_tax;
+    if (header.includes('invoice')) return item.invoice_value;
+    if (header === 'vat' || header.includes('vat')) return item.vat_12;
+    if (header.includes('cost')) return item.cost_wo_vat;
+    return '';
+  }
+
+  function currentPeriodId() {
+    // Prefer the visible period dropdown on the Entries page.
+    const byName = document.querySelector('select[name="period_id"]');
+    if (byName && byName.value) return byName.value;
+
+    // Fallback: read period_id from the URL, if present.
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('period_id') || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  const controls = document.createElement('div');
+  controls.className = 'mb-3 entries-full-search-controls';
+  controls.innerHTML = `
+    <label class="form-label mb-1" for="entries_full_search">Search Entries</label>
+    <input type="search" id="entries_full_search" class="form-control allow-spaces" data-allow-spaces="true" placeholder="Search CAT, store, address, TIN, invoice, VAT...">
+    <div class="form-text" id="entries_full_search_status">Search checks the entire entries database and all Entry columns, not only the current page.</div>
+  `;
+  tableWrap.parentNode.insertBefore(controls, tableWrap);
+
+  const searchPager = document.createElement('div');
+  searchPager.className = 'd-flex justify-content-between align-items-center mt-3 entries-search-pagination';
+  searchPager.style.display = 'none';
+  searchPager.innerHTML = `
+    <div class="d-flex align-items-center gap-2">
+      <span class="text-muted small">Rows per page</span>
+      <select class="form-select form-select-sm" id="entries_search_page_size" style="width: 90px;">
+        <option value="10">10</option>
+        <option value="20">20</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="entries_search_prev">Previous</button>
+      <span class="small" id="entries_search_page_info">Page 1 of 1</span>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="entries_search_next">Next</button>
+    </div>
+  `;
+  tableWrap.parentNode.insertBefore(searchPager, tableWrap.nextSibling);
+
+  const input = controls.querySelector('#entries_full_search');
+  const status = controls.querySelector('#entries_full_search_status');
+  const pageSizeSelect = searchPager.querySelector('#entries_search_page_size');
+  const prevBtn = searchPager.querySelector('#entries_search_prev');
+  const nextBtn = searchPager.querySelector('#entries_search_next');
+  const pageInfo = searchPager.querySelector('#entries_search_page_info');
+
+  let results = [];
+  let currentPage = 1;
+  let pageSize = parseInt(pageSizeSelect.value, 10) || 10;
+  let timer = null;
+  let lastController = null;
+  let activeQuery = '';
+  const colCount = Math.max(headerList.length, 1);
+
+  function totalPages() {
+    return Math.max(1, Math.ceil(results.length / pageSize));
+  }
+
+  function renderPage() {
+    const pages = totalPages();
+    if (currentPage > pages) currentPage = pages;
+    if (currentPage < 1) currentPage = 1;
+
+    if (!results.length) {
+      tbody.innerHTML = '<tr><td colspan="' + colCount + '" class="text-center text-muted py-3">No entries found.</td></tr>';
+    } else {
+      const start = (currentPage - 1) * pageSize;
+      const rows = results.slice(start, start + pageSize);
+      tbody.innerHTML = rows.map(function (item) {
+        const cells = headerList.map(function (header) {
+          if (header.includes('action')) return '<td>' + actionHtml(item) + '</td>';
+          return '<td>' + escapeHtml(cellValue(header, item) || '') + '</td>';
+        }).join('');
+        return '<tr>' + cells + '</tr>';
+      }).join('');
+    }
+
+    pageInfo.textContent = 'Page ' + currentPage + ' of ' + pages;
+    prevBtn.disabled = currentPage <= 1;
+    nextBtn.disabled = currentPage >= pages;
+    searchPager.style.display = activeQuery ? 'flex' : 'none';
+  }
+
+  function restoreOriginal() {
+    activeQuery = '';
+    if (lastController) lastController.abort();
+    results = [];
+    currentPage = 1;
+    tbody.innerHTML = originalBody;
+    setServerPaginationVisible(true);
+    searchPager.style.display = 'none';
+    status.textContent = 'Search checks the entire entries database and all Entry columns, not only the current page.';
+  }
+
+  async function searchAll(q) {
+    if (!q) {
+      restoreOriginal();
+      return;
+    }
+
+    activeQuery = q;
+    if (lastController) lastController.abort();
+    lastController = new AbortController();
+    setServerPaginationVisible(false);
+    searchPager.style.display = 'flex';
+    status.textContent = 'Searching the entire entries database...';
+
+    let url = '/api/entries-search?q=' + encodeURIComponent(q) + '&limit=5000';
+
+    try {
+      const response = await fetch(url, {
+        signal: lastController.signal,
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const data = await response.json();
+      results = data.items || [];
+      currentPage = 1;
+      renderPage();
+      const shown = results.length;
+      const total = data.total || shown;
+      status.textContent = 'Showing ' + shown + ' result(s)' + (total > shown ? ' out of ' + total + '. Refine your search to see fewer rows.' : '') + '.';
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      tbody.innerHTML = '<tr><td colspan="' + colCount + '" class="text-center text-danger py-3">Search error. Please refresh and try again.</td></tr>';
+      status.textContent = 'Search error. Please refresh and try again.';
+    }
+  }
+
+  input.addEventListener('input', function () {
+    const raw = input.value || '';
+    const q = raw.trim() ? raw : '';
+    clearTimeout(timer);
+    timer = setTimeout(function () { searchAll(q); }, 250);
+  });
+
+  pageSizeSelect.addEventListener('change', function () {
+    pageSize = parseInt(pageSizeSelect.value, 10) || 10;
+    currentPage = 1;
+    renderPage();
+  });
+
+  prevBtn.addEventListener('click', function () {
+    if (currentPage > 1) {
+      currentPage -= 1;
+      renderPage();
+    }
+  });
+
+  nextBtn.addEventListener('click', function () {
+    if (currentPage < totalPages()) {
+      currentPage += 1;
+      renderPage();
+    }
+  });
+})();
+</script>
+{% endblock %}

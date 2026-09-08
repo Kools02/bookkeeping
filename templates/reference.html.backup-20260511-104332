@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row g-4">
+  <div class="col-xl-4">
+    <div class="card p-4 mb-4">
+      <h4 class="mb-3">Upload reference Excel</h4>
+      <p class="text-secondary">Upload a file that contains a <strong>REFERENCE</strong> sheet with these columns: <strong>ACTUAL TIN NUMBER ON RECEIPT</strong>, <strong>TIN NUMBER NEEDED ON INPUT TAX</strong>, <strong>STORE</strong>, <strong>ADDRESS</strong>, and <strong>CAT</strong>.</p>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="upload">
+        <div class="mb-3">
+          <label class="form-label">Excel file</label>
+          <input type="file" name="reference_file" class="form-control" accept=".xlsx,.xlsm" required>
+        </div>
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" name="replace_all" id="replace_all" checked>
+          <label class="form-check-label" for="replace_all">Replace existing reference rows</label>
+        </div>
+        <button class="btn btn-primary w-100">Upload reference</button>
+      </form>
+    </div>
+
+    <div class="card p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">{{ 'Edit reference row' if edit_row else 'Single reference entry' }}</h4>
+        {% if edit_row %}
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('upload_reference') }}">Cancel</a>
+        {% endif %}
+      </div>
+      <form method="post" action="{{ url_for('edit_reference', reference_id=edit_row.id) if edit_row else url_for('upload_reference') }}">
+        <input type="hidden" name="action" value="manual_add">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Actual TIN Number on Receipt</label>
+            <input type="text" name="actual_tin_receipt" class="form-control" value="{{ edit_row.actual_tin_receipt if edit_row else '' }}" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label">TIN Number Needed on Input Tax</label>
+            <input type="text" name="tin_needed_input_tax" class="form-control" value="{{ edit_row.tin_needed_input_tax if edit_row else '' }}" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label">CAT</label>
+            <select name="category" id="category_select" class="form-select" {% if categories %}required{% endif %}>
+              <option value="">Select CAT</option>
+              {% for cat in categories %}
+              <option value="{{ cat }}" {% if edit_row and edit_row.category == cat %}selected{% endif %}>{{ cat }}</option>
+              {% endfor %}
+              <option value="__custom__">Add new CAT</option>
+            </select>
+          </div>
+          <div class="col-12" id="custom_category_wrap" style="display:none;">
+            <label class="form-label">New CAT</label>
+            <input type="text" name="custom_category" id="custom_category" class="form-control" placeholder="Type new category">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Store</label>
+            <input type="text" name="store" class="form-control" value="{{ edit_row.store if edit_row else '' }}" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Address</label>
+            <textarea name="address" class="form-control" rows="3" required>{{ edit_row.address if edit_row else '' }}</textarea>
+          </div>
+        </div>
+        <button class="btn btn-primary w-100 mt-4">{{ 'Update reference row' if edit_row else 'Save reference row' }}</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-xl-8">
+    <div class="card p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h4 class="mb-0">Reference summary</h4>
+        <span class="badge text-bg-primary">{{ count }} rows</span>
+      </div>
+      {% if latest %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 data-table reference-table">
+          <thead class="table-light">
+            <tr>
+              <th class="tin-cell">Actual TIN</th>
+              <th class="tin-cell">TIN Needed</th>
+              <th class="store-cell">Store</th>
+              <th class="address-cell">Address</th>
+              <th class="cat-cell">CAT</th>
+              <th class="text-end action-header">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in latest %}
+            <tr>
+              <td class="tin-cell">{{ row.actual_tin_receipt }}</td>
+              <td class="tin-cell">{{ row.tin_needed_input_tax }}</td>
+              <td class="store-cell"><span class="nowrap-scroll">{{ row.store }}</span></td>
+              <td class="address-cell"><span class="nowrap-scroll">{{ row.address }}</span></td>
+              <td class="cat-cell">{{ row.category }}</td>
+              <td class="text-end action-cell">
+                <div class="action-buttons">
+                  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('edit_reference', reference_id=row.id) }}">Edit</a>
+                  <form method="post" action="{{ url_for('delete_reference', reference_id=row.id) }}" onsubmit="return confirm('Delete this reference row?');">
+                    <button class="btn btn-outline-danger btn-sm">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if latest_pagination and latest_pagination.pages > 1 %}
+      <div class="pagination-wrap mt-3">
+        <nav aria-label="Reference pages">
+          <ul class="pagination pagination-sm mb-0">
+            <li class="page-item {% if not latest_pagination.has_prev %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('upload_reference', page=latest_pagination.prev_num) if latest_pagination.has_prev else '#' }}">Previous</a>
+            </li>
+            {% for p in latest_pagination.iter_pages(left_edge=1, left_current=1, right_current=2, right_edge=1) %}
+              {% if p %}
+              <li class="page-item {% if p == latest_pagination.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('upload_reference', page=p) }}">{{ p }}</a>
+              </li>
+              {% else %}
+              <li class="page-item disabled"><span class="page-link">…</span></li>
+              {% endif %}
+            {% endfor %}
+            <li class="page-item {% if not latest_pagination.has_next %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('upload_reference', page=latest_pagination.next_num) if latest_pagination.has_next else '#' }}">Next</a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+      {% endif %}
+      {% else %}
+        <p class="text-secondary mb-0">No reference data loaded yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const categorySelect = document.getElementById('category_select');
+  const customWrap = document.getElementById('custom_category_wrap');
+  const customInput = document.getElementById('custom_category');
+
+  function syncCategoryUI() {
+    const isCustom = categorySelect && categorySelect.value === '__custom__';
+    if (!customWrap || !customInput) return;
+    customWrap.style.display = isCustom ? 'block' : 'none';
+    customInput.required = isCustom;
+    if (!isCustom) customInput.value = '';
+  }
+
+  if (categorySelect) {
+    if ({{ 'true' if edit_row and edit_row.category not in categories else 'false' }}) {
+      categorySelect.value = '__custom__';
+      customWrap.style.display = 'block';
+      customInput.value = {{ (edit_row.category if edit_row else '')|tojson }};
+      customInput.required = true;
+    } else {
+      syncCategoryUI();
+    }
+    categorySelect.addEventListener('change', syncCategoryUI);
+  }
+</script>
+{% endblock %}

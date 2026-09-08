@@ -1,0 +1,247 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card p-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-4">
+    <div>
+      <h4 class="mb-1">Total Input of VAT</h4>
+      {% if active_period %}
+        <div class="text-secondary">Active month: <strong id="active-period-name">{{ active_period.name }}</strong>. Records are sorted A to Z by Store.</div>
+      {% else %}
+        <div class="text-secondary">No active month selected. Please activate a month first.</div>
+      {% endif %}
+    </div>
+    <div class="d-flex flex-wrap gap-2 align-items-start">
+      <a class="btn btn-primary" href="{{ url_for('new_entry') }}">New Entry Receipt</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('manage_periods') }}">Months</a>
+      {% if active_period %}
+        <a class="btn btn-success" href="{{ url_for('export_total_input_vat') }}">Export Excel</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="border rounded-4 p-3 bg-light h-100">
+        <div class="muted-label">Records</div>
+        <div class="stat-number" id="entry-count">{{ summary.entry_count }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="border rounded-4 p-3 bg-light h-100">
+        <div class="muted-label">Total Invoice</div>
+        <div class="stat-number" id="total-invoice">{{ money_text(summary.total_invoice) }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="border rounded-4 p-3 bg-light h-100">
+        <div class="muted-label">Total VAT</div>
+        <div class="stat-number" id="total-vat">{{ money_text(summary.total_vat) }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="border rounded-4 p-3 bg-light h-100">
+        <div class="muted-label">Total Cost W/O VAT</div>
+        <div class="stat-number" id="total-cost">{{ money_text(summary.total_cost) }}</div>
+      </div>
+    </div>
+  </div>
+
+  {% if active_period %}
+    <form method="get" class="row g-2 align-items-end mb-3" id="total-input-search-form">
+      <div class="col-lg-7">
+        <label class="form-label mb-1" for="total-input-search">Search Total Input VAT</label>
+        <input type="search" id="total-input-search" name="q" class="form-control allow-spaces" data-allow-spaces="true" value="{{ q }}" placeholder="Search all receipt columns: TIN, store, address, CAT, invoice, VAT, date...">
+      </div>
+      <div class="col-sm-6 col-lg-2">
+        <label class="form-label mb-1" for="total-input-per-page">Rows per page</label>
+        <select class="form-select" id="total-input-per-page" name="per_page">
+          {% for size in [10, 15, 20, 50, 100] %}
+            <option value="{{ size }}" {% if per_page == size %}selected{% endif %}>{{ size }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-6 col-lg-3 d-flex gap-2">
+        <button class="btn btn-primary" type="submit">Search</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('total_input_vat') }}">Reset</a>
+      </div>
+    </form>
+
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-2">
+      <div class="text-secondary small" id="total-input-page-info">
+        {% if q %}
+          Showing {{ filtered_count }} search result(s) for “{{ q }}”. Active month total remains shown above.
+        {% else %}
+          Showing active month records. This page auto-updates while it is open.
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 data-table total-input-vat-table">
+        <thead class="table-light">
+          <tr>
+            <th class="cat-cell">CAT</th>
+            <th class="store-cell">Store</th>
+            <th class="address-cell">Address</th>
+            <th class="tin-cell">Actual TIN</th>
+            <th class="tin-cell">TIN Input Tax</th>
+            <th class="text-end amount-cell">Invoice</th>
+            <th class="text-end amount-cell">VAT</th>
+            <th class="text-end amount-cell">Cost W/O VAT</th>
+          </tr>
+        </thead>
+        <tbody id="total-input-vat-body">
+          {% for entry in entries %}
+          <tr>
+            <td class="cat-cell">{{ entry.category or '-' }}</td>
+            <td class="store-cell"><span class="nowrap-scroll">{{ entry.store or '-' }}</span></td>
+            <td class="address-cell"><span class="nowrap-scroll">{{ entry.address or '-' }}</span></td>
+            <td class="tin-cell">{{ entry.actual_tin_number }}</td>
+            <td class="tin-cell">{{ entry.tin_number_on_input_tax or '-' }}</td>
+            <td class="text-end amount-cell">{{ money_text(entry.invoice_value) }}</td>
+            <td class="text-end amount-cell">{{ money_text(entry.vat_12) }}</td>
+            <td class="text-end amount-cell">{{ money_text(entry.cost_wo_vat) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="text-center text-muted py-3">No entries found for the active month.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if total_pagination and total_pagination.pages > 1 %}
+    <div class="pagination-wrap mt-3" id="total-input-pagination-wrap">
+      <nav aria-label="Total Input VAT pages">
+        <ul class="pagination pagination-sm mb-0">
+          <li class="page-item {% if not total_pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('total_input_vat', page=total_pagination.prev_num, per_page=per_page, q=q) if total_pagination.has_prev else '#' }}">Previous</a>
+          </li>
+          {% for p in total_pagination.iter_pages(left_edge=1, left_current=1, right_current=2, right_edge=1) %}
+            {% if p %}
+            <li class="page-item {% if p == total_pagination.page %}active{% endif %}">
+              <a class="page-link" href="{{ url_for('total_input_vat', page=p, per_page=per_page, q=q) }}">{{ p }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+            {% endif %}
+          {% endfor %}
+          <li class="page-item {% if not total_pagination.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('total_input_vat', page=total_pagination.next_num, per_page=per_page, q=q) if total_pagination.has_next else '#' }}">Next</a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+  {% else %}
+    <p class="text-secondary mb-0">Go to Months and set one month as active first.</p>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if active_period %}
+<script>
+(function () {
+  const form = document.getElementById('total-input-search-form');
+  const searchInput = document.getElementById('total-input-search');
+  const perPageSelect = document.getElementById('total-input-per-page');
+  const pageInfo = document.getElementById('total-input-page-info');
+  let searchTimer = null;
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function cell(value, className, alignEnd) {
+    const cls = className ? ' class="' + className + (alignEnd ? ' text-end' : '') + '"' : '';
+    return '<td' + cls + '>' + escapeHtml(value || '-') + '</td>';
+  }
+
+  function renderRows(items) {
+    const tbody = document.getElementById('total-input-vat-body');
+    if (!tbody) return;
+    if (!items || !items.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No entries found for the active month.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(function (item) {
+      return '<tr>' +
+        cell(item.category, 'cat-cell') +
+        '<td class="store-cell"><span class="nowrap-scroll">' + escapeHtml(item.store || '-') + '</span></td>' +
+        '<td class="address-cell"><span class="nowrap-scroll">' + escapeHtml(item.address || '-') + '</span></td>' +
+        cell(item.actual_tin_number, 'tin-cell') +
+        cell(item.tin_number_on_input_tax, 'tin-cell') +
+        cell(item.invoice_value, 'text-end amount-cell') +
+        cell(item.vat_12, 'text-end amount-cell') +
+        cell(item.cost_wo_vat, 'text-end amount-cell') +
+      '</tr>';
+    }).join('');
+  }
+
+  function currentParams() {
+    const params = new URLSearchParams(window.location.search);
+    params.set('q', searchInput ? ((searchInput.value || '').trim() ? (searchInput.value || '') : '') : (params.get('q') || ''));
+    params.set('per_page', perPageSelect ? perPageSelect.value : (params.get('per_page') || '15'));
+    params.set('page', params.get('page') || '1');
+    return params;
+  }
+
+  async function refreshTotalInputVat() {
+    const status = document.getElementById('total-input-status');
+    try {
+      const params = currentParams();
+      const response = await fetch('{{ url_for('api_total_input_vat') }}?' + params.toString(), { headers: { 'Accept': 'application/json' } });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const data = await response.json();
+      if (data.active_period && document.getElementById('active-period-name')) {
+        document.getElementById('active-period-name').textContent = data.active_period.name;
+      }
+      document.getElementById('entry-count').textContent = data.summary.entry_count;
+      document.getElementById('total-invoice').textContent = data.summary.total_invoice;
+      document.getElementById('total-vat').textContent = data.summary.total_vat;
+      document.getElementById('total-cost').textContent = data.summary.total_cost;
+      renderRows(data.items || []);
+      if (pageInfo && data.pagination) {
+        const q = (searchInput && (searchInput.value || '').trim()) ? (searchInput.value || '') : '';
+        pageInfo.textContent = q
+          ? 'Showing ' + data.pagination.total + ' search result(s) for “' + q + '”. Active month total remains shown above.'
+          : 'Page ' + data.pagination.page + ' of ' + (data.pagination.pages || 1) + ' • ' + data.pagination.total + ' active month record(s).';
+      }
+      if (status) status.textContent = 'Search checks all database columns for the active month, not only the current page. Updated automatically.';
+    } catch (error) {
+      if (status) status.textContent = 'Auto-update failed. Refresh the page if needed.';
+    }
+  }
+
+  if (searchInput && form) {
+    searchInput.addEventListener('input', function () {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(function () {
+        const params = currentParams();
+        params.set('page', '1');
+        // Keep the search text exactly as typed, including spaces between words,
+        // and update the table without reloading the page.
+        window.history.replaceState({}, '', '{{ url_for('total_input_vat') }}?' + params.toString());
+        refreshTotalInputVat();
+      }, 350);
+    });
+  }
+
+  if (perPageSelect) {
+    perPageSelect.addEventListener('change', function () {
+      const params = currentParams();
+      params.set('page', '1');
+      window.location.href = '{{ url_for('total_input_vat') }}?' + params.toString();
+    });
+  }
+
+  setInterval(refreshTotalInputVat, 8000);
+})();
+</script>
+{% endif %}
+{% endblock %}

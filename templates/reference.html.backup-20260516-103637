@@ -1,0 +1,397 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row g-4">
+  <div class="col-xl-4">
+    <div class="card p-4 mb-4">
+      <h4 class="mb-3">Upload reference Excel</h4>
+      <p class="text-secondary">Upload a file that contains a <strong>REFERENCE</strong> sheet with these columns: <strong>ACTUAL TIN NUMBER ON RECEIPT</strong>, <strong>TIN NUMBER NEEDED ON INPUT TAX</strong>, <strong>STORE</strong>, <strong>ADDRESS</strong>, and <strong>CAT</strong>.</p>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="upload">
+        <div class="mb-3">
+          <label class="form-label">Excel file</label>
+          <input type="file" name="reference_file" class="form-control" accept=".xlsx,.xlsm" required>
+        </div>
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" name="replace_all" id="replace_all" checked>
+          <label class="form-check-label" for="replace_all">Replace existing reference rows</label>
+        </div>
+        <button class="btn btn-primary w-100">Upload reference</button>
+      </form>
+    </div>
+
+    <div class="card p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">{{ 'Edit reference row' if edit_row else 'Single reference entry' }}</h4>
+        {% if edit_row %}
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('upload_reference') }}">Cancel</a>
+        {% endif %}
+      </div>
+      <form method="post" action="{{ url_for('edit_reference', reference_id=edit_row.id) if edit_row else url_for('upload_reference') }}">
+        <input type="hidden" name="action" value="manual_add">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Actual TIN Number on Receipt</label>
+            <input type="text" name="actual_tin_receipt" class="form-control" value="{{ edit_row.actual_tin_receipt if edit_row else '' }}" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label">TIN Number Needed on Input Tax</label>
+            <input type="text" name="tin_needed_input_tax" class="form-control" value="{{ edit_row.tin_needed_input_tax if edit_row else '' }}" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label">CAT</label>
+            <select name="category" id="category_select" class="form-select" {% if categories %}required{% endif %}>
+              <option value="">Select CAT</option>
+              {% for cat in categories %}
+              <option value="{{ cat }}" {% if edit_row and edit_row.category == cat %}selected{% endif %}>{{ cat }}</option>
+              {% endfor %}
+              <option value="__custom__">Add new CAT</option>
+            </select>
+          </div>
+          <div class="col-12" id="custom_category_wrap" style="display:none;">
+            <label class="form-label">New CAT</label>
+            <input type="text" name="custom_category" id="custom_category" class="form-control" placeholder="Type new category">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Store</label>
+            <input type="text" name="store" class="form-control" value="{{ edit_row.store if edit_row else '' }}" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Address</label>
+            <textarea name="address" class="form-control" rows="3" required>{{ edit_row.address if edit_row else '' }}</textarea>
+          </div>
+        </div>
+        <button class="btn btn-primary w-100 mt-4">{{ 'Update reference row' if edit_row else 'Save reference row' }}</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-xl-8">
+    <div class="card p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h4 class="mb-0">Reference summary</h4>
+        <span class="badge text-bg-primary">{{ count }} rows</span>
+      </div>
+      {% if latest %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 data-table reference-table">
+          <thead class="table-light">
+            <tr>
+              <th class="tin-cell">Actual TIN</th>
+              <th class="tin-cell">TIN Needed</th>
+              <th class="store-cell">Store</th>
+              <th class="address-cell">Address</th>
+              <th class="cat-cell">CAT</th>
+              <th class="text-end action-header">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in latest %}
+            <tr>
+              <td class="tin-cell">{{ row.actual_tin_receipt }}</td>
+              <td class="tin-cell">{{ row.tin_needed_input_tax }}</td>
+              <td class="store-cell"><span class="nowrap-scroll">{{ row.store }}</span></td>
+              <td class="address-cell"><span class="nowrap-scroll">{{ row.address }}</span></td>
+              <td class="cat-cell">{{ row.category }}</td>
+              <td class="text-end action-cell">
+                <div class="action-buttons">
+                  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('edit_reference', reference_id=row.id) }}">Edit</a>
+                  <form method="post" action="{{ url_for('delete_reference', reference_id=row.id) }}" onsubmit="return confirm('Delete this reference row?');">
+                    <button class="btn btn-outline-danger btn-sm">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if latest_pagination and latest_pagination.pages > 1 %}
+      <div class="pagination-wrap mt-3">
+        <nav aria-label="Reference pages">
+          <ul class="pagination pagination-sm mb-0">
+            <li class="page-item {% if not latest_pagination.has_prev %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('upload_reference', page=latest_pagination.prev_num) if latest_pagination.has_prev else '#' }}">Previous</a>
+            </li>
+            {% for p in latest_pagination.iter_pages(left_edge=1, left_current=1, right_current=2, right_edge=1) %}
+              {% if p %}
+              <li class="page-item {% if p == latest_pagination.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('upload_reference', page=p) }}">{{ p }}</a>
+              </li>
+              {% else %}
+              <li class="page-item disabled"><span class="page-link">…</span></li>
+              {% endif %}
+            {% endfor %}
+            <li class="page-item {% if not latest_pagination.has_next %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('upload_reference', page=latest_pagination.next_num) if latest_pagination.has_next else '#' }}">Next</a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+      {% endif %}
+      {% else %}
+        <p class="text-secondary mb-0">No reference data loaded yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const categorySelect = document.getElementById('category_select');
+  const customWrap = document.getElementById('custom_category_wrap');
+  const customInput = document.getElementById('custom_category');
+
+  function syncCategoryUI() {
+    const isCustom = categorySelect && categorySelect.value === '__custom__';
+    if (!customWrap || !customInput) return;
+    customWrap.style.display = isCustom ? 'block' : 'none';
+    customInput.required = isCustom;
+    if (!isCustom) customInput.value = '';
+  }
+
+  if (categorySelect) {
+    if ({{ 'true' if edit_row and edit_row.category not in categories else 'false' }}) {
+      categorySelect.value = '__custom__';
+      customWrap.style.display = 'block';
+      customInput.value = {{ (edit_row.category if edit_row else '')|tojson }};
+      customInput.required = true;
+    } else {
+      syncCategoryUI();
+    }
+    categorySelect.addEventListener('change', syncCategoryUI);
+  }
+</script>
+<!-- reference-full-search-fix -->
+<script>
+(function () {
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function findReferenceTable() {
+    const tables = Array.from(document.querySelectorAll('table'));
+    return tables.find(function (table) {
+      const text = (table.innerText || '').toLowerCase();
+      return text.includes('store') && text.includes('tin');
+    }) || null;
+  }
+
+  const table = findReferenceTable();
+  if (!table || table.dataset.fullReferenceSearchInstalled === '1') return;
+  table.dataset.fullReferenceSearchInstalled = '1';
+
+  const tbody = table.querySelector('tbody');
+  if (!tbody) return;
+
+  const originalBody = tbody.innerHTML;
+  const tableWrap = table.closest('.table-responsive') || table;
+  const card = table.closest('.card') || table.parentElement || document.body;
+
+  const serverPaginationNodes = Array.from(card.querySelectorAll('nav, .pagination'))
+    .map(function (node) { return node.closest('nav') || node; })
+    .filter(function (node, index, arr) { return node && arr.indexOf(node) === index; });
+  const serverPaginationDisplay = serverPaginationNodes.map(function (node) {
+    return [node, node.style.display || ''];
+  });
+
+  function setServerPaginationVisible(show) {
+    serverPaginationDisplay.forEach(function (pair) {
+      pair[0].style.display = show ? pair[1] : 'none';
+    });
+  }
+
+  function headers() {
+    return Array.from(table.querySelectorAll('thead th')).map(function (th) {
+      return (th.innerText || '').trim().toLowerCase();
+    });
+  }
+
+  const headerList = headers();
+  const actionIndex = headerList.findIndex(function (h) { return h.includes('action'); });
+  const firstRow = tbody.querySelector('tr');
+  const firstActionCell = firstRow && actionIndex >= 0 ? firstRow.children[actionIndex] : null;
+  const firstActionHtml = firstActionCell ? firstActionCell.innerHTML : '';
+
+  function actionHtml(item) {
+    if (actionIndex < 0) return '';
+    const id = String(item.id == null ? '' : item.id);
+    if (!id) return '';
+
+    if (firstActionHtml.trim()) {
+      // Reuse the original Edit/Delete buttons from the server-rendered table.
+      // Replace numeric ids only in common edit/delete URL patterns.
+      return firstActionHtml
+        .replace(/(\/references?\/)(\d+)(\/(?:edit|delete))/g, '$1' + id + '$3')
+        .replace(/(reference_id["']?\s*(?:value=|:)\s*["']?)(\d+)/gi, '$1' + id)
+        .replace(/(data-reference-id=["'])(\d+)(["'])/gi, '$1' + id + '$3');
+    }
+
+    return '<a href="/references/' + encodeURIComponent(id) + '/edit" class="btn btn-sm btn-outline-primary me-1">Edit</a>' +
+      '<form method="post" action="/references/' + encodeURIComponent(id) + '/delete" style="display:inline;" onsubmit="return confirm(\'Delete this reference row?\');">' +
+      '<button type="submit" class="btn btn-sm btn-outline-danger">Delete</button></form>';
+  }
+
+  function cellValue(header, item) {
+    if (header.includes('action')) return null;
+    if (header.includes('store')) return item.store;
+    if (header.includes('address')) return item.address;
+    if (header.includes('cat') || header.includes('category')) return item.category;
+    if (header.includes('input') || header.includes('needed')) return item.tin_needed_input_tax;
+    if (header.includes('actual') || header.includes('receipt') || header.includes('tin')) return item.actual_tin_receipt;
+    if (header === 'id' || header.includes(' id')) return item.id;
+    return '';
+  }
+
+  const controls = document.createElement('div');
+  controls.className = 'mb-3 reference-full-search-controls';
+  controls.innerHTML = `
+    <label class="form-label mb-1" for="reference_full_search">Search Reference Summary</label>
+    <input type="search" id="reference_full_search" class="form-control" placeholder="Search TIN, store, address, category...">
+    <div class="form-text" id="reference_full_search_status">Search checks the entire reference database, not only the current page.</div>
+  `;
+  tableWrap.parentNode.insertBefore(controls, tableWrap);
+
+  const searchPager = document.createElement('div');
+  searchPager.className = 'd-flex justify-content-between align-items-center mt-3 reference-search-pagination';
+  searchPager.style.display = 'none';
+  searchPager.innerHTML = `
+    <div class="d-flex align-items-center gap-2">
+      <span class="text-muted small">Rows per page</span>
+      <select class="form-select form-select-sm" id="reference_search_page_size" style="width: 90px;">
+        <option value="10">10</option>
+        <option value="20">20</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="reference_search_prev">Previous</button>
+      <span class="small" id="reference_search_page_info">Page 1 of 1</span>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="reference_search_next">Next</button>
+    </div>
+  `;
+  tableWrap.parentNode.insertBefore(searchPager, tableWrap.nextSibling);
+
+  const input = controls.querySelector('#reference_full_search');
+  const status = controls.querySelector('#reference_full_search_status');
+  const pageSizeSelect = searchPager.querySelector('#reference_search_page_size');
+  const prevBtn = searchPager.querySelector('#reference_search_prev');
+  const nextBtn = searchPager.querySelector('#reference_search_next');
+  const pageInfo = searchPager.querySelector('#reference_search_page_info');
+
+  let results = [];
+  let currentPage = 1;
+  let pageSize = parseInt(pageSizeSelect.value, 10) || 10;
+  let timer = null;
+  let lastController = null;
+  let activeQuery = '';
+  const colCount = Math.max(headerList.length, 1);
+
+  function totalPages() {
+    return Math.max(1, Math.ceil(results.length / pageSize));
+  }
+
+  function renderPage() {
+    const pages = totalPages();
+    if (currentPage > pages) currentPage = pages;
+    if (currentPage < 1) currentPage = 1;
+
+    if (!results.length) {
+      tbody.innerHTML = '<tr><td colspan="' + colCount + '" class="text-center text-muted py-3">No reference records found.</td></tr>';
+    } else {
+      const start = (currentPage - 1) * pageSize;
+      const rows = results.slice(start, start + pageSize);
+      tbody.innerHTML = rows.map(function (item) {
+        const cells = headerList.map(function (header) {
+          if (header.includes('action')) return '<td>' + actionHtml(item) + '</td>';
+          return '<td>' + escapeHtml(cellValue(header, item) || '') + '</td>';
+        }).join('');
+        return '<tr>' + cells + '</tr>';
+      }).join('');
+    }
+
+    pageInfo.textContent = 'Page ' + currentPage + ' of ' + pages;
+    prevBtn.disabled = currentPage <= 1;
+    nextBtn.disabled = currentPage >= pages;
+    searchPager.style.display = activeQuery ? 'flex' : 'none';
+  }
+
+  function restoreOriginal() {
+    activeQuery = '';
+    if (lastController) lastController.abort();
+    results = [];
+    currentPage = 1;
+    tbody.innerHTML = originalBody;
+    setServerPaginationVisible(true);
+    searchPager.style.display = 'none';
+    status.textContent = 'Search checks the entire reference database, not only the current page.';
+  }
+
+  async function searchAll(q) {
+    if (!q) {
+      restoreOriginal();
+      return;
+    }
+
+    activeQuery = q;
+    if (lastController) lastController.abort();
+    lastController = new AbortController();
+    setServerPaginationVisible(false);
+    searchPager.style.display = 'flex';
+    status.textContent = 'Searching full reference database...';
+
+    try {
+      const response = await fetch('/api/reference-summary-search?q=' + encodeURIComponent(q) + '&limit=5000', {
+        signal: lastController.signal,
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const data = await response.json();
+      results = data.items || [];
+      currentPage = 1;
+      renderPage();
+      const shown = results.length;
+      const total = data.total || shown;
+      status.textContent = 'Showing ' + shown + ' result(s)' + (total > shown ? ' out of ' + total + '. Refine your search to see fewer rows.' : '') + '.';
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      tbody.innerHTML = '<tr><td colspan="' + colCount + '" class="text-center text-danger py-3">Search error. Please refresh and try again.</td></tr>';
+      status.textContent = 'Search error. Please refresh and try again.';
+    }
+  }
+
+  input.addEventListener('input', function () {
+    const q = (input.value || '').trim();
+    clearTimeout(timer);
+    timer = setTimeout(function () { searchAll(q); }, 250);
+  });
+
+  pageSizeSelect.addEventListener('change', function () {
+    pageSize = parseInt(pageSizeSelect.value, 10) || 10;
+    currentPage = 1;
+    renderPage();
+  });
+
+  prevBtn.addEventListener('click', function () {
+    if (currentPage > 1) {
+      currentPage -= 1;
+      renderPage();
+    }
+  });
+
+  nextBtn.addEventListener('click', function () {
+    if (currentPage < totalPages()) {
+      currentPage += 1;
+      renderPage();
+    }
+  });
+})();
+</script>
+
+{% endblock %}

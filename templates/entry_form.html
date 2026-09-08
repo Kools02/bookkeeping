@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">{{ 'Edit Entry Receipt' if entry else 'New Entry Receipt' }}</h4>
+      </div>
+      <form method="post" id="entry-form">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">Month</label>
+            <select name="period_id" class="form-select" required>
+              {% for period in periods %}
+                <option value="{{ period.id }}" {% if (entry and period.id == entry.period_id) or (not entry and default_period and period.id == default_period.id) %}selected{% endif %}>{{ period.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Actual TIN Number</label>
+            <input type="text" name="actual_tin_number" id="actual_tin_number" class="form-control" value="{{ entry.actual_tin_number if entry else '' }}" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Invoice value</label>
+            <input type="number" name="invoice_value" id="invoice_value" class="form-control" step="0.01" min="0" value="{{ entry.invoice_value if entry else '' }}" required>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-4">
+          <button class="btn btn-primary">{{ 'Update Entry Receipt' if entry else 'Save Entry Receipt' }}</button>
+          <a class="btn btn-outline-secondary" href="{{ url_for('total_input_vat') }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="lookup-box">
+      <div class="fw-semibold mb-3">Auto lookup preview</div>
+      <div class="mb-2"><span class="muted-label">CAT</span><div id="preview-category" class="value-scroll">{{ entry.category if entry else '-' }}</div></div>
+      <div class="mb-2"><span class="muted-label">STORE</span><div id="preview-store" class="value-scroll">{{ entry.store if entry else '-' }}</div></div>
+      <div class="mb-2"><span class="muted-label">ADDRESS</span><div id="preview-address" class="value-scroll">{{ entry.address if entry else '-' }}</div></div>
+      <div class="mb-2"><span class="muted-label">TIN NUMBER ON INPUT TAX</span><div id="preview-input-tin" class="value-scroll">{{ entry.tin_number_on_input_tax if entry else '-' }}</div></div>
+      <hr>
+      <div class="mb-2"><span class="muted-label">12% VAT</span><div id="preview-vat">{{ ('%.2f'|format(entry.vat_12)) if entry else '-' }}</div></div>
+      <div><span class="muted-label">COST W/O VAT</span><div id="preview-cost">{{ ('%.2f'|format(entry.cost_wo_vat)) if entry else '-' }}</div></div>
+      <div class="small text-secondary mt-3">The app computes VAT as <code>invoice / 1.12 × 12%</code> and cost as <code>invoice - VAT</code>.</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const tinInput = document.getElementById('actual_tin_number');
+  const invoiceInput = document.getElementById('invoice_value');
+  const fields = {
+    category: document.getElementById('preview-category'),
+    store: document.getElementById('preview-store'),
+    address: document.getElementById('preview-address'),
+    inputTin: document.getElementById('preview-input-tin'),
+    vat: document.getElementById('preview-vat'),
+    cost: document.getElementById('preview-cost')
+  };
+
+  let lookupTimer;
+
+  async function runLookup() {
+    const tin = tinInput.value.trim();
+    const invoice = invoiceInput.value.trim();
+    const params = new URLSearchParams();
+    if (tin) params.set('tin', tin);
+    if (invoice) params.set('invoice', invoice);
+    const response = await fetch(`/api/lookup?${params.toString()}`);
+    const data = await response.json();
+
+    fields.category.textContent = data.matched ? (data.category || '-') : 'No match';
+    fields.store.textContent = data.matched ? (data.store || '-') : '-';
+    fields.address.textContent = data.matched ? (data.address || '-') : '-';
+    fields.inputTin.textContent = data.matched ? (data.tin_number_on_input_tax || '-') : '-';
+    fields.vat.textContent = data.vat || '-';
+    fields.cost.textContent = data.cost_wo_vat || '-';
+  }
+
+  function queueLookup() {
+    clearTimeout(lookupTimer);
+    lookupTimer = setTimeout(runLookup, 250);
+  }
+
+  tinInput.addEventListener('input', queueLookup);
+  invoiceInput.addEventListener('input', queueLookup);
+  if (tinInput.value || invoiceInput.value) runLookup();
+</script>
+{% endblock %}

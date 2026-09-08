@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row g-4 mb-4">
+  <div class="col-md-4">
+    <div class="card p-4 h-100">
+      <div class="muted-label">Reference rows</div>
+      <div class="stat-number">{{ reference_count }}</div>
+      <div class="text-secondary">Rows available for TIN lookup</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card p-4 h-100">
+      <div class="muted-label">All encoded entries</div>
+      <div class="stat-number">{{ entry_count }}</div>
+      <div class="text-secondary">Saved across all months</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card p-4 h-100">
+      <div class="muted-label">Active month</div>
+      <div class="stat-number fs-4">{{ active_period.name if active_period else 'None yet' }}</div>
+      <div class="text-secondary">Set one active month for faster encoding</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card p-4 h-100">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">Months</h4>
+        <a class="btn btn-primary btn-sm" href="{{ url_for('manage_periods') }}">Manage</a>
+      </div>
+      {% if periods %}
+        <div class="list-group list-group-flush">
+          {% for period in periods %}
+            <div class="list-group-item px-0 d-flex justify-content-between align-items-center bg-transparent">
+              <div>
+                <div class="fw-semibold">{{ period.name }} {% if period.is_active %}<span class="badge text-bg-success">Active</span>{% endif %}</div>
+                <small class="text-secondary">{{ period_counts.get(period.id, 0) }} entries</small>
+              </div>
+              <div class="d-flex gap-2">
+                <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('list_entries', period_id=period.id) }}">View</a>
+                <a class="btn btn-outline-primary btn-sm" href="{{ url_for('export_period', period_id=period.id) }}">Export</a>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-secondary mb-0">Create your first month like <strong>Mar'26</strong>.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card p-4 h-100">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">Latest entries{% if active_period %} · {{ active_period.name }}{% endif %}</h4>
+        <a class="btn btn-primary btn-sm" href="{{ url_for('new_entry') }}">New Entry</a>
+      </div>
+      {% if latest_entries %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 entries-table">
+            <thead class="table-light">
+              <tr>
+                <th>TIN</th>
+                <th>Store</th>
+                <th class="text-end">Invoice</th>
+                <th class="text-end">VAT</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for entry in latest_entries %}
+                <tr>
+                  <td>{{ entry.actual_tin_number }}</td>
+                  <td class="store-cell"><span class="nowrap-scroll">{{ entry.store or '-' }}</span></td>
+                  <td class="text-end">{{ '%.2f'|format(entry.invoice_value) }}</td>
+                  <td class="text-end">{{ '%.2f'|format(entry.vat_12) }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-secondary mb-0">No entries yet for the active month.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

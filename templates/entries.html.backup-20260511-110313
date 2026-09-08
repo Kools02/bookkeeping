@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card p-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-3">
+    <div>
+      <h4 class="mb-1">Entries</h4>
+      <div class="text-secondary">Review, edit, and export monthly encoded data.</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <form method="get" class="d-flex gap-2">
+        <select name="period_id" class="form-select">
+          {% for period in periods %}
+            <option value="{{ period.id }}" {% if selected_period and period.id == selected_period.id %}selected{% endif %}>{{ period.name }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-outline-secondary">View</button>
+      </form>
+      <a class="btn btn-primary" href="{{ url_for('new_entry') }}">New Entry</a>
+      {% if selected_period %}
+      <a class="btn btn-success" href="{{ url_for('export_period', period_id=selected_period.id) }}">Export Excel</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if selected_period and entries %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 data-table entries-table">
+      <thead class="table-light">
+        <tr>
+          <th class="cat-cell">CAT</th>
+          <th class="store-cell">Store</th>
+          <th class="address-cell">Address</th>
+          <th class="tin-cell">Actual TIN</th>
+          <th class="tin-cell">TIN Input Tax</th>
+          <th class="text-end amount-cell">Invoice</th>
+          <th class="text-end amount-cell">VAT</th>
+          <th class="text-end amount-cell">Cost W/O VAT</th>
+          <th class="text-end action-header">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+        <tr>
+          <td class="cat-cell">{{ entry.category or '-' }}</td>
+          <td class="store-cell"><span class="nowrap-scroll">{{ entry.store or '-' }}</span></td>
+          <td class="address-cell"><span class="nowrap-scroll">{{ entry.address or '-' }}</span></td>
+          <td class="tin-cell">{{ entry.actual_tin_number }}</td>
+          <td class="tin-cell">{{ entry.tin_number_on_input_tax or '-' }}</td>
+          <td class="text-end amount-cell">{{ '%.2f'|format(entry.invoice_value) }}</td>
+          <td class="text-end amount-cell">{{ '%.2f'|format(entry.vat_12) }}</td>
+          <td class="text-end amount-cell">{{ '%.2f'|format(entry.cost_wo_vat) }}</td>
+          <td class="text-end action-cell">
+            <div class="action-buttons">
+              <a class="btn btn-outline-primary btn-sm" href="{{ url_for('edit_entry', entry_id=entry.id) }}">Edit</a>
+              <form method="post" action="{{ url_for('delete_entry', entry_id=entry.id) }}" onsubmit="return confirm('Delete this entry?');">
+                <button class="btn btn-outline-danger btn-sm">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if entries_pagination and entries_pagination.pages > 1 %}
+  <div class="pagination-wrap mt-3">
+    <nav aria-label="Entries pages">
+      <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {% if not entries_pagination.has_prev %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('list_entries', period_id=selected_period.id, page=entries_pagination.prev_num) if entries_pagination.has_prev else '#' }}">Previous</a>
+        </li>
+        {% for p in entries_pagination.iter_pages(left_edge=1, left_current=1, right_current=2, right_edge=1) %}
+          {% if p %}
+          <li class="page-item {% if p == entries_pagination.page %}active{% endif %}">
+            <a class="page-link" href="{{ url_for('list_entries', period_id=selected_period.id, page=p) }}">{{ p }}</a>
+          </li>
+          {% else %}
+          <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not entries_pagination.has_next %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('list_entries', period_id=selected_period.id, page=entries_pagination.next_num) if entries_pagination.has_next else '#' }}">Next</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+  {% elif selected_period %}
+    <p class="text-secondary mb-0">No entries yet for {{ selected_period.name }}.</p>
+  {% else %}
+    <p class="text-secondary mb-0">Create a month first.</p>
+  {% endif %}
+</div>
+{% endblock %}
