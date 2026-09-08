@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Local app data
+*.db
+uploads/
+exports/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Backup / patch artifacts
+*.backup*
+*.bak
+*_PATCH.*

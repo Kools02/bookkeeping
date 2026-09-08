@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-2 mb-4">
+  <div>
+    <div class="muted-label mb-2">Receipt encoding</div>
+    <h1 class="page-title h3 mb-1">{{ 'Edit receipt' if entry else 'New receipt' }}</h1>
+    <p class="page-subtitle mb-0">Enter the receipt TIN and invoice amount. Reference details and VAT are calculated automatically.</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="{{ url_for('total_input_vat') }}"><i class="bi bi-arrow-left me-1"></i>Back to VAT report</a>
+</div>
+
+<div class="row g-4">
+  <div class="col-xl-8">
+    <div class="card p-4 p-lg-5">
+      <form method="post" id="entry-form" novalidate>
+        <div class="mb-4">
+          <div class="muted-label mb-2">Receipt details</div>
+          <h2 class="h5 fw-bold">Basic information</h2>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label" for="period_id">Bookkeeping month</label>
+            <select name="period_id" id="period_id" class="form-select" required>
+              {% for period in periods %}
+              <option value="{{ period.id }}" {% if (entry and period.id == entry.period_id) or (not entry and default_period and period.id == default_period.id) %}selected{% endif %}>{{ period.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="actual_tin_number">Actual TIN number</label>
+            <input type="text" name="actual_tin_number" id="actual_tin_number" class="form-control no-spaces" value="{{ entry.actual_tin_number if entry else '' }}" placeholder="Enter TIN" autocomplete="off" required>
+            <div class="form-text">Formatting such as dashes is normalized for lookup.</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="invoice_value">Invoice value</label>
+            <div class="input-group">
+              <span class="input-group-text">₱</span>
+              <input type="number" name="invoice_value" id="invoice_value" class="form-control" step="0.01" min="0" inputmode="decimal" value="{{ entry.invoice_value if entry else '' }}" placeholder="0.00" required>
+            </div>
+          </div>
+        </div>
+
+        <hr class="my-4">
+        <div class="d-flex flex-column flex-sm-row gap-2">
+          <button class="btn btn-primary px-4" type="submit"><i class="bi bi-check2-circle me-1"></i>{{ 'Update receipt' if entry else 'Save receipt' }}</button>
+          <a class="btn btn-light px-4" href="{{ url_for('total_input_vat') }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-xl-4">
+    <div class="lookup-box sticky-xl-top" style="top:88px">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div><div class="muted-label">Live lookup</div><div class="fw-bold">Reference match</div></div>
+        <i class="bi bi-search text-primary fs-5"></i>
+      </div>
+      <div id="lookup-status" class="lookup-status pending mb-3"><i class="bi bi-hourglass-split"></i><span>Waiting for TIN</span></div>
+      <div class="mb-3"><span class="muted-label">Category</span><div id="preview-category" class="value-scroll fw-semibold">{{ entry.category if entry else '-' }}</div></div>
+      <div class="mb-3"><span class="muted-label">Store</span><div id="preview-store" class="value-scroll">{{ entry.store if entry else '-' }}</div></div>
+      <div class="mb-3"><span class="muted-label">Address</span><div id="preview-address" class="value-scroll">{{ entry.address if entry else '-' }}</div></div>
+      <div class="mb-3"><span class="muted-label">TIN on input tax</span><div id="preview-input-tin" class="value-scroll">{{ entry.tin_number_on_input_tax if entry else '-' }}</div></div>
+      <hr>
+      <div class="d-flex justify-content-between mb-2"><span class="text-secondary">12% VAT</span><strong id="preview-vat">{{ ('%.2f'|format(entry.vat_12)) if entry else '-' }}</strong></div>
+      <div class="d-flex justify-content-between"><span class="text-secondary">Cost without VAT</span><strong id="preview-cost">{{ ('%.2f'|format(entry.cost_wo_vat)) if entry else '-' }}</strong></div>
+      <div class="small text-secondary mt-3">VAT is calculated as <code>invoice ÷ 1.12 × 12%</code>.</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const tinInput = document.getElementById('actual_tin_number');
+  const invoiceInput = document.getElementById('invoice_value');
+  const status = document.getElementById('lookup-status');
+  const fields = {
+    category: document.getElementById('preview-category'),
+    store: document.getElementById('preview-store'),
+    address: document.getElementById('preview-address'),
+    inputTin: document.getElementById('preview-input-tin'),
+    vat: document.getElementById('preview-vat'),
+    cost: document.getElementById('preview-cost')
+  };
+  let timer;
+  function setStatus(kind, icon, text) {
+    status.className = 'lookup-status ' + kind;
+    status.innerHTML = '<i class="bi ' + icon + '"></i><span>' + text + '</span>';
+  }
+  async function runLookup() {
+    const tin = tinInput.value.trim();
+    const invoice = invoiceInput.value.trim();
+    if (!tin && !invoice) {
+      setStatus('pending', 'bi-hourglass-split', 'Waiting for TIN');
+      Object.values(fields).forEach(el => el.textContent = '-');
+      return;
+    }
+    setStatus('pending', 'bi-arrow-repeat', 'Checking reference…');
+    const params = new URLSearchParams();
+    if (tin) params.set('tin', tin);
+    if (invoice) params.set('invoice', invoice);
+    try {
+      const response = await fetch('/api/lookup?' + params.toString(), {headers:{'Accept':'application/json'}});
+      if (!response.ok) throw new Error('Lookup failed');
+      const data = await response.json();
+      if (data.matched) {
+        setStatus('matched', 'bi-check-circle-fill', 'Reference matched');
+        fields.category.textContent = data.category || '-';
+        fields.store.textContent = data.store || '-';
+        fields.address.textContent = data.address || '-';
+        fields.inputTin.textContent = data.tin_number_on_input_tax || '-';
+      } else {
+        setStatus('unmatched', 'bi-exclamation-circle-fill', tin ? 'No reference match' : 'Enter a TIN');
+        fields.category.textContent = 'No match';
+        fields.store.textContent = '-';
+        fields.address.textContent = '-';
+        fields.inputTin.textContent = '-';
+      }
+      fields.vat.textContent = data.vat || '-';
+      fields.cost.textContent = data.cost_wo_vat || '-';
+    } catch (error) {
+      setStatus('unmatched', 'bi-wifi-off', 'Lookup unavailable');
+    }
+  }
+  function queueLookup() { clearTimeout(timer); timer = setTimeout(runLookup, 250); }
+  tinInput.addEventListener('input', queueLookup);
+  invoiceInput.addEventListener('input', queueLookup);
+  if (tinInput.value || invoiceInput.value) runLookup();
+})();
+</script>
+{% endblock %}

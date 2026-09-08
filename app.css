@@ -1,0 +1,54 @@
+:root{
+  --app-bg:#f5f7fb;
+  --app-card:#ffffff;
+  --app-ink:#172033;
+  --app-muted:#6b7280;
+  --app-primary:#2563eb;
+  --app-border:#e7eaf0;
+  --app-dark:#0f172a;
+}
+body{background:var(--app-bg);color:var(--app-ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;}
+.app-shell{max-width:1440px;margin:0 auto;}
+.app-navbar{background:rgba(255,255,255,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--app-border);}
+.navbar-brand{font-weight:800;letter-spacing:-.02em;color:var(--app-ink);}
+.brand-mark{width:36px;height:36px;border-radius:11px;display:inline-grid;place-items:center;background:var(--app-dark);color:#fff;}
+.nav-link{color:#667085;font-weight:600;border-radius:10px;padding:.55rem .75rem!important;}
+.nav-link:hover,.nav-link.active{color:var(--app-primary);background:#eff6ff;}
+.active-period-pill{display:inline-flex;align-items:center;gap:.45rem;background:#ecfdf3;color:#047857;border:1px solid #bbf7d0;border-radius:999px;padding:.42rem .7rem;font-size:.82rem;font-weight:700;}
+.active-period-pill span{width:7px;height:7px;border-radius:50%;background:#10b981;}
+.card{border:1px solid var(--app-border)!important;border-radius:18px!important;box-shadow:0 8px 30px rgba(15,23,42,.05)!important;background:var(--app-card);}
+.page-title{font-weight:800;letter-spacing:-.035em;}
+.page-subtitle{color:var(--app-muted);}
+.stat-card{padding:1.2rem 1.25rem;position:relative;overflow:hidden;}
+.stat-card:after{content:"";position:absolute;width:90px;height:90px;border-radius:50%;background:#eff6ff;right:-35px;top:-35px;}
+.stat-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:#eff6ff;color:var(--app-primary);font-size:1.2rem;}
+.stat-number{font-size:1.65rem;font-weight:800;letter-spacing:-.03em;}
+.muted-label{font-size:.76rem;text-transform:uppercase;letter-spacing:.07em;color:#8a93a3;font-weight:700;}
+.btn{border-radius:10px;font-weight:650;}
+.btn-primary{box-shadow:0 5px 14px rgba(37,99,235,.18);}
+.form-control,.form-select{border-color:#dfe3ea;border-radius:10px;padding:.65rem .75rem;}
+.form-control:focus,.form-select:focus{border-color:#93c5fd;box-shadow:0 0 0 .2rem rgba(37,99,235,.1);}
+.form-label{font-weight:650;color:#344054;font-size:.9rem;}
+.lookup-box{background:linear-gradient(180deg,#f8fbff,#eef6ff);border:1px solid #dbeafe;border-radius:16px;padding:1.1rem;}
+.lookup-status{display:flex;align-items:center;gap:.5rem;border-radius:10px;padding:.65rem .75rem;font-size:.85rem;font-weight:650;}
+.lookup-status.pending{background:#f3f4f6;color:#6b7280;}
+.lookup-status.matched{background:#ecfdf3;color:#047857;}
+.lookup-status.unmatched{background:#fff7ed;color:#c2410c;}
+.data-table{min-width:1100px;}
+.data-table td,.data-table th{white-space:nowrap;vertical-align:middle;}
+.data-table thead th{font-size:.76rem;text-transform:uppercase;letter-spacing:.05em;color:#667085;border-bottom-width:1px;}
+.data-table tbody td{font-size:.9rem;}
+.data-table tbody tr:hover{background:#fafcff;}
+.data-table .cat-cell{min-width:90px}.data-table .store-cell{min-width:220px;max-width:260px}.data-table .address-cell{min-width:240px;max-width:300px}.data-table .tin-cell{min-width:160px}.data-table .amount-cell{min-width:105px;}
+.action-header,.action-cell{position:sticky;right:0;min-width:132px;background:#fff!important;z-index:2;box-shadow:-1px 0 0 rgba(15,23,42,.06);}
+.table-responsive{border:1px solid var(--app-border);border-radius:14px;}
+.nowrap-scroll,.value-scroll{display:block;max-width:100%;white-space:nowrap;overflow-x:auto;scrollbar-width:thin;}
+.pagination-wrap{overflow-x:auto;padding-top:.75rem}.pagination{flex-wrap:nowrap;}
+.empty-state{padding:3rem 1rem;text-align:center;color:var(--app-muted);}
+.empty-state .empty-icon{width:54px;height:54px;border-radius:16px;background:#eef2ff;color:#4f46e5;display:grid;place-items:center;font-size:1.5rem;margin:0 auto 1rem;}
+.app-alert{border:0;border-radius:12px;}
+.app-footer{border-top:1px solid var(--app-border);color:#98a2b3;font-size:.8rem;background:#fff;}
+.quick-action{border:1px solid var(--app-border);border-radius:14px;padding:1rem;text-decoration:none;color:inherit;display:flex;align-items:center;gap:.85rem;transition:.15s ease;}
+.quick-action:hover{border-color:#bfdbfe;background:#f8fbff;transform:translateY(-1px);}
+.quick-action i{font-size:1.2rem;color:var(--app-primary);}
+@media(max-width:991.98px){.data-table{min-width:980px}.app-shell{width:100%}.active-period-pill{margin-bottom:.75rem;}}
